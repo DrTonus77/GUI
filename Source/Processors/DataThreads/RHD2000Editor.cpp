@@ -22,12 +22,10 @@
 */
 
 #include "RHD2000Editor.h"
-#include "../../UI/EditorViewport.h"
 #include <cmath>
 
 #include "../Editors/ChannelSelector.h"
 #include "../SourceNode/SourceNode.h"
-#include "../RecordNode/RecordNode.h"
 #include "RHD2000Thread.h"
 
 #ifdef WIN32
@@ -39,7 +37,7 @@ inline double round(double x)
 #endif
 #endif
 
-FPGAchannelList::FPGAchannelList(GenericProcessor* proc_, Viewport* p, FPGAcanvas* c) : viewport(p), canvas(c), chainUpdate(false)
+FPGAchannelList::FPGAchannelList(GenericProcessor* proc_, Viewport* p, FPGAcanvas* c) : chainUpdate(false), viewport(p), canvas(c)
 {
     proc = (SourceNode*)proc_;
     channelComponents.clear();
@@ -133,7 +131,7 @@ void FPGAchannelList::update()
 
     // find out which streams are active.
     bool hsActive[MAX_NUM_HEADSTAGES+1];
-    bool adcActive = false;
+    //bool adcActive = false;
     int numActiveHeadstages = 0;
     int hsColumn[MAX_NUM_HEADSTAGES + 1];
     int numChannelsPerHeadstage[MAX_NUM_HEADSTAGES + 1];
@@ -338,7 +336,11 @@ void FPGAchannelList::updateImpedance(Array<int> streams, Array<int> channels, A
 
 /****************************************************/
 FPGAchannelComponent::FPGAchannelComponent(FPGAchannelList* cl, int ch, int gainIndex_, String N, Array<float> gains_, ChannelType type_) :
+<<<<<<< HEAD
 gains(gains_), channelList(cl), channel(ch), name(N), gainIndex(gainIndex_), type(type_)
+=======
+type(type_), gains(gains_), channelList(cl), channel(ch), name(N), gainIndex(gainIndex_)
+>>>>>>> open-ephys/master
 {
     Font f = Font("Small Text", 13, Font::plain);
 
@@ -533,8 +535,8 @@ void FPGAcanvas::update()
 
 void FPGAcanvas::resized()
 {
-    int screenWidth = getWidth();
-    int screenHeight = getHeight();
+    //int screenWidth = getWidth();
+    //int screenHeight = getHeight();
 
     int scrollBarThickness = channelsViewport->getScrollBarThickness();
     int numChannels = 35; // max channels per stream? (32+3)*2
@@ -740,9 +742,9 @@ void RHD2000Editor::handleAsyncUpdate()
 	canvas->updateImpedance(impedanceData->streams, impedanceData->channels, impedanceData->magnitudes, impedanceData->phases);
     if (saveImpedances)
     {
-        getProcessorGraph()->getRecordNode()->createNewDirectory();
+		CoreServices::RecordNode::createNewrecordingDir();
 
-        String path(getProcessorGraph()->getRecordNode()->getDataDirectory().getFullPathName()
+		String path(CoreServices::RecordNode::getRecordingPath().getFullPathName()
                     + File::separatorString + "impedance_measurement.xml");
         std::cout << "Saving impedance measurements in " << path << std::endl;
         File file(path);
@@ -828,7 +830,7 @@ void RHD2000Editor::buttonEvent(Button* button)
             headstageOptionsInterfaces[i]->checkEnabledState();
         }
         // board->updateChannelNames();
-        getEditorViewport()->makeEditorVisible(this, false, true);
+		CoreServices::updateSignalChain(this);
     }
     else if (button == electrodeButtons[0])
     {
@@ -843,7 +845,7 @@ void RHD2000Editor::buttonEvent(Button* button)
         board->enableAdcs(button->getToggleState());
         //        board->updateChannelNames();
         std::cout << "ADC Button toggled" << std::endl;
-        getEditorViewport()->makeEditorVisible(this, false, true);
+		CoreServices::updateSignalChain(this);
         std::cout << "Editor visible." << std::endl;
     }
     else if (button == dacTTLButton)
@@ -931,6 +933,7 @@ void RHD2000Editor::saveCustomParameters(XmlElement* xml)
     xml->setAttribute("DSPCutoffFreq", dspInterface->getDspCutoffFreq());
     xml->setAttribute("save_impedance_measurements",saveImpedances);
     xml->setAttribute("auto_measure_impedances",measureWhenRecording);
+	xml->setAttribute("LEDs", ledButton->getToggleState());
 }
 
 void RHD2000Editor::loadCustomParameters(XmlElement* xml)
@@ -952,6 +955,7 @@ void RHD2000Editor::loadCustomParameters(XmlElement* xml)
     dspInterface->setDspCutoffFreq(xml->getDoubleAttribute("DSPCutoffFreq"));
     saveImpedances = xml->getBoolAttribute("save_impedance_measurements");
     measureWhenRecording = xml->getBoolAttribute("auto_measure_impedances");
+	ledButton->setToggleState(xml->getBoolAttribute("LEDs", true),sendNotification);
 }
 
 
@@ -1018,7 +1022,7 @@ void BandwidthInterface::labelTextChanged(Label* label)
 
             if (requestedValue < 100.0 || requestedValue > 20000.0 || requestedValue < lastLowCutString.getFloatValue())
             {
-                editor->sendActionMessage("Value out of range.");
+                CoreServices::sendStatusMessage("Value out of range.");
 
                 label->setText(lastHighCutString, dontSendNotification);
 
@@ -1040,7 +1044,7 @@ void BandwidthInterface::labelTextChanged(Label* label)
 
             if (requestedValue < 0.1 || requestedValue > 500.0 || requestedValue > lastHighCutString.getFloatValue())
             {
-                editor->sendActionMessage("Value out of range.");
+				CoreServices::sendStatusMessage("Value out of range.");
 
                 label->setText(lastLowCutString, dontSendNotification);
 
@@ -1057,7 +1061,7 @@ void BandwidthInterface::labelTextChanged(Label* label)
     }
     else if (editor->acquisitionIsActive)
     {
-        editor->sendActionMessage("Can't change bandwidth while acquisition is active!");
+		CoreServices::sendStatusMessage("Can't change bandwidth while acquisition is active!");
         if (label == upperBandwidthSelection)
             label->setText(lastHighCutString, dontSendNotification);
         else
@@ -1159,7 +1163,7 @@ void SampleRateInterface::comboBoxChanged(ComboBox* cb)
 
             std::cout << "Setting sample rate to index " << cb->getSelectedId()-1 << std::endl;
 
-            editor->getEditorViewport()->makeEditorVisible(editor, false, true);
+			CoreServices::updateSignalChain(editor);
         }
     }
 }
@@ -1316,8 +1320,7 @@ void HeadstageOptionsInterface::buttonClicked(Button* button)
             editor->updateSettings();
         }
 
-
-        editor->getEditorViewport()->makeEditorVisible(editor, false, true);
+		CoreServices::updateSignalChain(editor);
     }
 
 }
@@ -1382,7 +1385,7 @@ void AudioInterface::labelTextChanged(Label* label)
 
             if (requestedValue < 0 || requestedValue > 127)
             {
-                editor->sendActionMessage("Value out of range.");
+				CoreServices::sendStatusMessage("Value out of range.");
 
                 label->setText(lastNoiseSlicerString, dontSendNotification);
 
@@ -1402,7 +1405,7 @@ void AudioInterface::labelTextChanged(Label* label)
         int requestedValue = int(val.getValue()); // Note that it might be nice to translate to actual uV levels (16*value)
         if (requestedValue < 0 || requestedValue > 127)
         {
-            editor->sendActionMessage("Value out of range.");
+			CoreServices::sendStatusMessage("Value out of range.");
             label->setText(lastNoiseSlicerString, dontSendNotification);
             return;
         }
@@ -1481,7 +1484,7 @@ void DSPInterface::labelTextChanged(Label* label)
     }
     else if (editor->acquisitionIsActive)
     {
-        editor->sendActionMessage("Can't change DSP cutoff while acquisition is active!");
+		CoreServices::sendStatusMessage("Can't change DSP cutoff while acquisition is active!");
     }
 
 }

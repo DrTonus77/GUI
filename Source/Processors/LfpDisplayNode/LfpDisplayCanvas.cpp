@@ -105,11 +105,11 @@ LfpDisplayCanvas::LfpDisplayCanvas(LfpDisplayNode* processor_) :
     voltageRanges[AUX_CHANNEL].add("750");
     voltageRanges[AUX_CHANNEL].add("1000");
     voltageRanges[AUX_CHANNEL].add("2000");
-    voltageRanges[AUX_CHANNEL].add("5000");
-    selectedVoltageRange[AUX_CHANNEL] = 6;
-    rangeGain[AUX_CHANNEL] = 1; //uV
+    //voltageRanges[AUX_CHANNEL].add("5000");
+    selectedVoltageRange[AUX_CHANNEL] = 9;
+    rangeGain[AUX_CHANNEL] = 0.001; //mV
     rangeSteps[AUX_CHANNEL] = 10;
-    rangeUnits.add("uV");
+    rangeUnits.add("mV");
     typeNames.add("AUX");
 
     tbut = new UtilityButton("AUX",Font("Small Text", 9, Font::plain));
@@ -245,6 +245,10 @@ LfpDisplayCanvas::LfpDisplayCanvas(LfpDisplayNode* processor_) :
     lfpDisplay->setNumChannels(nChans);
     lfpDisplay->setRange(voltageRanges[HEADSTAGE_CHANNEL][selectedVoltageRange[HEADSTAGE_CHANNEL]-1].getFloatValue()*rangeGain[HEADSTAGE_CHANNEL]
         ,HEADSTAGE_CHANNEL);
+	lfpDisplay->setRange(voltageRanges[ADC_CHANNEL][selectedVoltageRange[ADC_CHANNEL] - 1].getFloatValue()*rangeGain[ADC_CHANNEL]
+		, ADC_CHANNEL);
+	lfpDisplay->setRange(voltageRanges[AUX_CHANNEL][selectedVoltageRange[AUX_CHANNEL] - 1].getFloatValue()*rangeGain[AUX_CHANNEL]
+		, AUX_CHANNEL);
 
     // add event display-specific controls (currently just an enable/disable button)
     for (int i = 0; i < 8; i++)
@@ -341,10 +345,15 @@ void LfpDisplayCanvas::update()
 
     for (int i = 0; i <= nChans; i++) // extra channel for events
     {
-        if (i < nChans)
-            sampleRate.add(processor->channels[i]->sampleRate);
-        else
-            sampleRate.add(processor->channels[i-1]->sampleRate); // for event channel (IT'S A HACK -- BE CAREFUL!)
+		if (processor->getNumInputs() > 0)
+		{
+			if (i < nChans)
+				sampleRate.add(processor->channels[i]->sampleRate);
+			else
+				sampleRate.add(processor->channels[i - 1]->sampleRate); // for event channel (IT'S A HACK -- BE CAREFUL!)
+		}
+		else
+			sampleRate.add(30000);
         
        // std::cout << "Sample rate for ch " << i << " = " << sampleRate[i] << std::endl; 
         displayBufferIndex.add(0);
@@ -657,6 +666,8 @@ void LfpDisplayCanvas::updateScreenBuffer()
 
     // copy new samples from the displayBuffer into the screenBuffer
     int maxSamples = lfpDisplay->getWidth() - leftmargin;
+
+	ScopedLock displayLock(*processor->getMutex());
 
     for (int channel = 0; channel <= nChans; channel++) // pull one extra channel for event display
     {
@@ -1028,7 +1039,10 @@ void LfpDisplayCanvas::loadVisualizerParameters(XmlElement* xml)
 
 ChannelType LfpDisplayCanvas::getChannelType(int n)
 {
-    return processor->channels[n]->getType();
+	if (n < processor->getNumInputs())
+		return processor->channels[n]->getType();
+	else
+		return HEADSTAGE_CHANNEL;
 }
 
 ChannelType LfpDisplayCanvas::getSelectedType()
@@ -1110,7 +1124,7 @@ void LfpTimescale::setTimebase(float t)
     {
         String labelString = String(timebase/10.0f*1000.0f*i);
 
-        labels.add(labelString.substring(0,4));
+        labels.add(labelString.substring(0,6));
     }
 
     repaint();
@@ -1357,6 +1371,7 @@ int LfpDisplay::getRange(ChannelType type)
         if (channels[i]->getType() == type)
             return channels[i]->getRange();
     }
+    return 0;
 }
 
 
@@ -1789,7 +1804,7 @@ void LfpChannelDisplay::paint(Graphics& g)
                 // // pixel wise line plot has no anti-aliasing, but runs much faster
                 double a = (canvas->getYCoordMax(chan, i)/range*channelHeightFloat)+getHeight()/2;
                 double b = (canvas->getYCoordMin(chan, i)/range*channelHeightFloat)+getHeight()/2;
-                double m = (canvas->getYCoordMean(chan, i)/range*channelHeightFloat)+getHeight()/2;
+                //double m = (canvas->getYCoordMean(chan, i)/range*channelHeightFloat)+getHeight()/2;
                 if (a<b)
                 {
                     from = (a);
@@ -1994,7 +2009,7 @@ void LfpChannelDisplayInfo::buttonClicked(Button* button)
 
     display->setEnabledState(state, chan);
 
-    UtilityButton* b = (UtilityButton*) button;
+    //UtilityButton* b = (UtilityButton*) button;
 
     // if (state)
     // {
